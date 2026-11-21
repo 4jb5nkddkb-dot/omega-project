@@ -1,0 +1,26 @@
+# 检查点与日志（体积大、可再生，不进仓库）
+*.npz
+*.pt
+*.log
+checkpoints/*.npz
+checkpoints/*.pt
+out/
+
+# 小测试 fixture 例外：tests/ 下如有微型 .pt/.npz fixture（KB 级），
+# 可 git add -f 单独跟踪；大检查点一律不进仓库。
+
+# Python 字节码与缓存
+__pycache__/
+*.pyc
+
+# 虚拟环境
+.venv/
+venv/
+
+# 系统与打包产物
+.DS_Store
+*.egg-info/
+
+# data/raw/ 体积较大（约 2.7 MB 文本）但已跟踪：它是训练语料的原始来源，
+# 改动应走 git；processed/ 的 .jsonl 同理。真正的大文件只有检查点，
+# 已在上面排除。

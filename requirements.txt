@@ -1,0 +1,9 @@
+# PyTorch 重写依赖
+# torch 已验证：2026-11-21 在 .venv 里装好 torch 2.15.0+cpu（CPU 版），
+# 故 pin 该版本。CUDA 机器：把下一行换成对应 CUDA 构建，例如
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# 再装其余依赖（不要直接 pip install -r requirements.txt 装 CUDA 版）。
+torch==2.15.0+cpu
+# 纯 NumPy + 标准库时代的约束保留：numpy 2.x 未经本代码库验证，不升级。
+numpy==1.26.4
+pyyaml

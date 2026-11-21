@@ -1,0 +1,38 @@
+# 模型配置：d512 通用小模型（generalist-v2，单分支 single-merge）
+# 来源：dual_sft/generalist_pilot_train.py 默认值 + 实际运行日志
+#   （d512 single tied，参数 13,916,328；见 GATED_DUAL_DESIGN.md 规模节）
+# 本文件为扁平 key: value，供 scripts/train.py 内置简易读取器解析
+# （无 PyYAML 依赖；不使用锚点、嵌套、复杂类型）。
+
+recipe: generalist-v2
+merge_method: single
+d_model: 512
+n_blocks: 4
+n_heads: 8
+n_kv_heads: 4
+vocab_size: 4622
+vocab_chars: 4619
+tie_embeddings: true
+dropout: 0.1
+label_smoothing: 0.1
+use_rms: true
+pre_norm: true
+pos_mode: rope
+ff_mode: swiglu
+init_style: gpt2
+max_seq: 512
+seq_len: 128
+batch_size: 8
+lr: 0.001
+schedule: cosine
+params: 13916328
+# 混合采样配比 v2（2026-11-13）：经典 25 / 代码 20 / 对话 10 / 常识 15 / 推理 15 / 世界 15
+ratio_classics: 0.25
+ratio_code: 0.20
+ratio_dialogue: 0.10
+ratio_knowledge: 0.15
+ratio_reasoning: 0.15
+ratio_world: 0.15
+# single-merge 无门控；门控分流定义见 configs/model_gated.yaml
+gate_left_domains: classics,code,dialogue,knowledge,reasoning
+gate_right_domains: world
