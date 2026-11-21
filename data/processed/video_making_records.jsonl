@@ -1,0 +1,52 @@
+{"text": "motion 是给 agent 的一双手：脑在 agent 那边，负责理解 skill、写分镜、判断画面；手只做三件确定的事：找本领、按故事清单出片、验片打分。"}
+{"text": "一句话能出片的人是 agent，motion 是让这句话每次都落到同一个结果上的工具。"}
+{"text": "motion 不生成画面，不写旁白，不判断画面好不好；画面与旁白由 agent 或用户提供，工具只保证合成与验片这两步确定、可复现、可打分。"}
+{"text": "找本领：motion skill search short-form，按关键词找。"}
+{"text": "出片：motion make --manifest story.json，按故事清单出一条 30 s 竖屏片。"}
+{"text": "验片：motion video verify --json out.mp4，出机器可读的报告和分数。"}
+{"text": "故事清单是脑、世界与手之间的契约：工具只按文件办事，不猜故事。"}
+{"text": "清单谁都能写：agent、小世界、用户，写好后一条命令出片。"}
+{"text": "清单字段 title 是故事名，仅作提示，可以不填。"}
+{"text": "清单字段 seconds 是成片时长，不填默认 30 s。"}
+{"text": "清单字段 width 与 height 是画面尺寸，不填默认 1080 与 1920。"}
+{"text": "清单字段 fps 是每 s 播放的画面张数，不填默认 30。"}
+{"text": "清单字段 bg_volume 是片段原声音量，0 到 1 之间，不填默认 0.25。"}
+{"text": "清单字段 narr_delay_ms 管旁白晚多久出声，单位是 ms，不填默认 1000。"}
+{"text": "清单字段 clips 是片段路径数组，必填，至少一个。"}
+{"text": "清单字段 narration 是旁白音频路径，必填。"}
+{"text": "清单字段 out 是输出路径，必填。"}
+{"text": "清单字段 captions 是字幕行，每行有 style 与 text，时间 start 与 end 可选；style 只允许 Hook、Body、Payoff。"}
+{"text": "清单里的相对路径按清单文件所在目录来算，绝对路径照常用。"}
+{"text": "缺省 captions 或空数组时不烧字幕。"}
+{"text": "字幕时间有两种写法：清单自带，每行都写 start 与 end，工具原样采用。"}
+{"text": "字幕时间自动计算：每行都不写时间，只给 style 与 text，工具在合成前用 ffprobe 实测旁白时长，按字数均分算出每行时间。"}
+{"text": "自动计时公式：每字时长等于旁白实测时长除以总字数，每行起始等于旁白延迟加上前面各行字数乘以每字时长，最后一行结束强制为成片时长。"}
+{"text": "自动计时成功时打印字幕时间：自动计算，旁白实测时长。"}
+{"text": "工具在内部生成 ASS 字幕：Hook 84 号字，Body 62 号字，Payoff 72 号字金色，用 Noto Sans CJK SC 字体。"}
+{"text": "生成的 ASS 保留在输出文件同目录，与输出同名，后缀为 ass。"}
+{"text": "清单报错：缺必填字段、JSON 写坏了、style 非法、时间不合法、混用带时间与不带时间的行时，工具以非零退出码退出，并在 stderr 里点出字段名或原因。"}
+{"text": "验片命令：motion video verify out.mp4，可加 --expect 1080x1920 与 --fps 30。"}
+{"text": "验片加 --json 时 stdout 只输出一个 JSON 对象，诊断走 stderr，含 score 与 verdict。"}
+{"text": "验片分数第一项是分辨率，权重 0.35，实测宽高等于 --expect 才算过，默认 1080x1920。"}
+{"text": "验片分数第二项是每 s 画面张数，权重 0.25，实测与 --fps 之差小于 0.05 才算过，默认 30。"}
+{"text": "验片分数第三项是时长，权重 0.25，实测与 --seconds 之差不超过 0.10 s 才算过，默认 30。"}
+{"text": "验片分数第四项是音频流存在，权重 0.15，有音频流才算过，只看存在，不听内容。"}
+{"text": "verdict 为 pass 当且仅当四项全过，分数在 0 到 1 之间。"}
+{"text": "分数是规格接地分，回流给世界的格式是 grounded_error 等于 1 减 score，reward 等于 score。"}
+{"text": "接地记录由 verify_to_grounding.py 写进 grounding_ledger.jsonl，按 episode 与 video 去重。"}
+{"text": "诚实说明：verify 只能看画面规格和音频流是否存在，听不到旁白，读不到烧进去的字幕。"}
+{"text": "字幕与旁白的对齐程度、画面内容是否对题都不在分数里，不要把 score 说成视频质量全检。"}
+{"text": "checks 里 caption_alignment 的 ok 为 null，detail 写 not_measured，意思是没测，不是通过，也不是没通过。"}
+{"text": "合成配方：每个片段先缩放、再 concat，再用 subtitles 烧字幕；片段音频调音量后 concat。"}
+{"text": "旁白先延迟，再补齐，再截到 TOTAL，TOTAL 是各片段 ffprobe 实测时长之和，不猜。"}
+{"text": "背景音与旁白用 amix 混合，取第一个时长；编码用 libx264，音频用 aac 160k，加上 faststart。"}
+{"text": "支持任意多个片段，不只 3 个；--clips 里多个路径用逗号分隔时请用绝对路径。"}
+{"text": "教训：字幕必须逐字抄旁白，并按实测旁白时长计时；第一集的字幕与旁白对不上，就是因为字幕不是逐字抄的。"}
+{"text": "教训：ffmpeg 的 silenceremove 没有 keep_silence 参数，只有 start 与 stop 相关参数。"}
+{"text": "局限：JSON 处理器没有 true、false、null，Unicode 代理对会退化。"}
+{"text": "局限：无字幕分支与相对路径清单还没有端到端跑通过。"}
+{"text": "样例 examples/danaotiangong.json 可以复现第 3 集大闹天宫，验证通过。"}
+{"text": "安装需要系统里有 ffmpeg 与 ffprobe，以及 Noto CJK 字体，字幕烧录用。"}
+{"text": "开发命令：cargo test 跑单元测试，cargo clippy 检查，cargo build --release 编出二进制。"}
+{"text": "局限：目前只在 Linux 上验证过，没有 Windows 交叉编译，也没有发过 release。"}
+{"text": "局限：skill search 是子串匹配，不是语义检索。"}
