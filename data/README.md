@@ -7,6 +7,7 @@ data/
   raw/        原始语料（只读来源的副本，不做加工）
     Xiyouji.txt            《西游记》全文
     classics_rulin.txt     《儒林外史》加工本（见下“来源说明”）
+    classics_honglou.txt   《红楼梦》加工本（见下“来源说明”，2026-11-23 起）
   processed/  训练直接读的文件（词表 + 各域文本 + 世界域 .jsonl 记录）
     generalist_vocab.json  字符表：4619 字 + BOS/EOS/UNK = 4622 词
     dialogue_pilot.txt     对话域
@@ -28,6 +29,7 @@ data/
 | --- | --- | --- |
 | `raw/Xiyouji.txt` | 《西游记》全文（旧仓库 `omega-chat/Xiyouji.txt` 的副本） | 公有领域（作者逝世逾百年） |
 | `raw/classics_rulin.txt` | 《儒林外史》：Project Gutenberg #24032 繁体本，经 OpenCC t2s 转简体、按 4622 词表整句过滤后的加工本。**注意：这里存的是加工后的文件**，不是 Gutenberg 原文；原始繁体本见旧仓库 `dual_sft/generalist_corpus/rulinwaishi_raw.txt`，转简体本见 `rulinwaishi_simplified.txt`，转换脚本是 `data/scripts/convert_rulin.py` | 公有领域（Gutenberg 公版） |
+| `raw/classics_honglou.txt` | 《红楼梦》：Project Gutenberg #24264 繁体本，经 OpenCC t2s 转简体、按 4622 词表整句过滤后的加工本，留存率 81.7%（712,928 / 872,164 字，保留句 31,842，丢弃句 8,599），2026-11-23 加工，从下一块训练（chunk 6）起生效。**注意：这里存的是加工后的文件**，不是 Gutenberg 原文；原始繁体本见旧仓库 `dual_sft/generalist_corpus/hongloumeng_raw.txt`，转简体本见 `hongloumeng_simplified.txt`，转换脚本是 `data/scripts/convert_honglou.py`。原文自 Waterloo 镜像站（mirror.csclub.uwaterloo.ca/gutenberg/）拉取，因 Gutenberg 主站当晚维护（503）；书号经 Online Books Page 核对，开头第一回已验明身份 | 公有领域（Gutenberg 公版） |
 | `processed/knowledge_wiki.txt` | 中文维基百科条目导言（zh.wikipedia.org API，exintro），2700 条中 1008 条过滤后保留，2238 句、71667 字；条目清单见旧仓库 `dual_sft/generalist_corpus/knowledge_provenance.md` | CC BY-SA 4.0（署名 + 相同方式共享） |
 | `processed/knowledge_youxue.txt` | 《幼学琼林》：Project Gutenberg eBook #52269，明程登吉撰 | 公有领域（Gutenberg 公版） |
 | `processed/*.jsonl` 世界域记录 | 本项目自产：小世界循环的协议记录（工具调用、自述、探针/寄存器格式、最小对、做视频经验），纯文字，无图片/视频 | 本项目自有数据 |
@@ -43,6 +45,11 @@ python data/scripts/build_generalist_vocab.py
 
 # 2. 《儒林外史》加工（Gutenberg 原文 -> 转简体 -> 按词表整句过滤）
 python data/scripts/convert_rulin.py
+
+# 2b. 《红楼梦》加工（与上一步同一套规矩，2026-11-23）
+python data/scripts/convert_honglou.py
+# 注：过滤后含 122 行回目标题下划线（全由词表内破折号组成，按同一
+# 规则保留，未另作手工清洗）；留存率 81.7% 与加工前测算一致。
 
 # 3. 常识域：抓维基导言 -> 按词表过滤成句
 python data/scripts/fetch_wiki_knowledge.py   # 首批

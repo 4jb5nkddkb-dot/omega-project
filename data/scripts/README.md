@@ -16,6 +16,7 @@
 | --- | --- | --- |
 | `build_generalist_vocab.py` | `processed/generalist_vocab.json` | 从各域文本建 4622 字符表 |
 | `convert_rulin.py` | `raw/classics_rulin.txt` | Gutenberg #24032 繁体本 → OpenCC t2s 转简体 → 按词表整句过滤 |
+| `convert_honglou.py` | `raw/classics_honglou.txt` | Gutenberg #24264 繁体本 → OpenCC t2s 转简体 → 按词表整句过滤（与上行同一套规矩，2026-11-23） |
 | `fetch_wiki_knowledge.py` | （中间产物，维基导言首批） | zh.wikipedia.org API 随机条目 exintro |
 | `fetch_wiki_knowledge_more.py` | （中间产物，维基导言续抓） | 同上，第二批 |
 | `fetch_wiki_val.py` | （验证集留出） | 从维基常识域留出验证集 |

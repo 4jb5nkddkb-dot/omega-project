@@ -94,6 +94,7 @@ def default_paths(root=None):
     """新布局下的默认语料路径：域 -> 文件列表（代码域为 glob 模式）。
 
     经典：data/raw/Xiyouji.txt + data/raw/classics_rulin.txt
+          + data/raw/classics_honglou.txt（2026-11-23 起）
     代码：项目根目录下全部 .py（排除 __pycache__/archive/legacy）
     对话：data/processed/dialogue_pilot.txt
     常识：data/processed/knowledge_wiki.txt + knowledge_youxue.txt
@@ -103,7 +104,8 @@ def default_paths(root=None):
     root = Path(root) if root is not None else project_root()
     raw, proc = root / "data" / "raw", root / "data" / "processed"
     return {
-        "经典": [raw / "Xiyouji.txt", raw / "classics_rulin.txt"],
+        "经典": [raw / "Xiyouji.txt", raw / "classics_rulin.txt",
+                 raw / "classics_honglou.txt"],
         "代码": [str(root / "**" / "*.py")],
         "对话": [proc / "dialogue_pilot.txt"],
         "常识": [proc / "knowledge_wiki.txt", proc / "knowledge_youxue.txt"],
@@ -119,7 +121,8 @@ def live_corpus_paths():
     mirror = Path.home() / "workspace" / "omega-chat"
     corpus = dual_sft / "generalist_corpus"
     return {
-        "经典": [mirror / "Xiyouji.txt", corpus / "classics_rulin.txt"],
+        "经典": [mirror / "Xiyouji.txt", corpus / "classics_rulin.txt",
+                 corpus / "classics_honglou.txt"],
         "代码": [str(mirror / "**" / "*.py")],
         "对话": [corpus / "dialogue_pilot.txt"],
         "常识": [corpus / "knowledge_wiki.txt", corpus / "knowledge_youxue.txt"],
