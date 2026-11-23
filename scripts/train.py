@@ -159,10 +159,11 @@ def main(argv=None):
     vocab = json.loads((PROJECT_ROOT / "data" / "processed"
                         / "generalist_vocab.json").read_text(encoding="utf-8"))
     tok = CharTokenizer(vocab["chars"])
-    ids = domain_texts(tok)  # 默认读新布局 data/；过渡期可改传 live 路径
+    ids, answer_masks = domain_texts(tok, return_answer_masks=True)  # 默认读新布局 data/；过渡期可改传 live 路径
     batch_fn = make_batch_fn(ids, seq_len=int(cfg.get("seq_len", 128)),
                              batch_size=int(cfg.get("batch_size", 8)),
-                             seed=int(cfg.get("seed", 7)))
+                             seed=int(cfg.get("seed", 7)),
+                             answer_masks=answer_masks)
 
     extra_meta = {
         "recipe": cfg.get("recipe"),

@@ -18,9 +18,11 @@ train() 的签名（合同要求 Agent B 自定，见这里）::
 - init_from：只取参数热启动，优化器与学习率曲线全新（与 --init 一致，
   和 resume_from 互斥）。
 - batch_fn / dataloader 二选一：batch_fn(rng) -> (inputs, targets)
-  或 (inputs, targets, gate_targets)，与 NumPy train_steps 的约定一致；
-  dataloader 每批同样返回二元组或三元组（见 training.dataset）。
-  两者都不给时报 ValueError。
+  或 (inputs, targets, gate_targets)，或带答案区 loss 掩码的四元组
+  (inputs, targets, gate_targets, loss_mask)——loss_mask 为真才计
+  loss（先读后答：世界域只算答案区，见 training/dataset.py 的
+  make_batch_fn(answer_masks=...)）；dataloader 每批同样返回二元组、
+  三元组或四元组（见 training.dataset）。两者都不给时报 ValueError。
 - device：None 时自动选 CUDA（若可用）否则 CPU；amp 只在 CUDA 上生效。
 - 返回 dict：{"optimizer", "last_loss", "completed_step",
   "schedule_total", "start_step"}。
@@ -67,7 +69,7 @@ import torch
 
 from training.dataset import (RATIOS, domain_texts, live_corpus_paths,
                               make_batch_fn, resolve_paths)
-from training.loss import cross_entropy_loss, gate_bce_loss
+from training.loss import cross_entropy_loss, gate_bce_loss, masked_loss
 from training.optimizer import build_optimizer, clip_grad_norm, lr_at
 
 __all__ = ["train", "main"]
@@ -348,18 +350,32 @@ def train(model, *, batch_fn=None, dataloader=None, steps=None,
             loss_acc = 0.0
             for _ in range(grad_accum_steps):
                 batch = _next_batch()
-                if len(batch) == 3:
+                if len(batch) == 4:
+                    x, y, gt, loss_mask = batch
+                    gt = gt if gated else None
+                elif len(batch) == 3:
                     x, y, gt = batch
                     gt = gt if gated else None
+                    loss_mask = None
                 else:
                     x, y, gt = batch[0], batch[1], None
+                    loss_mask = None
                 x = torch.as_tensor(x, dtype=torch.long, device=device)
                 y = torch.as_tensor(y, dtype=torch.long, device=device)
                 if gt is not None:
                     gt = torch.as_tensor(gt, dtype=torch.float32, device=device)
+                if loss_mask is not None:
+                    loss_mask = torch.as_tensor(loss_mask, dtype=torch.bool,
+                                                 device=device)
                 with torch.amp.autocast("cuda", enabled=use_amp):
                     logits = model(x)
-                    loss = cross_entropy_loss(logits, y, label_smoothing=label_smoothing)
+                    if loss_mask is not None:
+                        # 答案区 loss：只算掩码内的答案 token（先读后答），
+                        # 其余位置不计 loss；门 BCE 不受掩码影响。
+                        loss = masked_loss(logits, y, loss_mask,
+                                           label_smoothing=label_smoothing)
+                    else:
+                        loss = cross_entropy_loss(logits, y, label_smoothing=label_smoothing)
                     if gt is not None and gate_loss_weight:
                         z_gate = _gate_logit(model, x)
                         if z_gate is not None:
@@ -494,7 +510,7 @@ def main(argv=None):
     tok = CharTokenizer(meta["chars"])
     print(f"vocab: {tok.vocab_size} (BOS/EOS/UNK 0/1/2) from {vocab_path}")
     paths = live_corpus_paths() if args.live_corpus else None
-    ids = domain_texts(tok, paths=paths)
+    ids, answer_masks = domain_texts(tok, paths=paths, return_answer_masks=True)
 
     model = DualTransformer(
         d_model=args.d_model, n_blocks=args.n_blocks, n_heads=args.n_heads,
@@ -507,7 +523,8 @@ def main(argv=None):
           f"dropout={args.dropout} label_smoothing={args.label_smoothing} params={n_params:,}")
     print(f"train: seq_len={args.seq} batch_size={args.batch}")
 
-    batch_fn = make_batch_fn(ids, args.seq, batch_size=args.batch, seed=args.seed)
+    batch_fn = make_batch_fn(ids, args.seq, batch_size=args.batch, seed=args.seed,
+                             answer_masks=answer_masks)
     train(
         model, batch_fn=batch_fn, steps=args.steps, batch_size=args.batch,
         seq_len=args.seq, lr=args.lr, schedule="cosine", warmup_steps=10,

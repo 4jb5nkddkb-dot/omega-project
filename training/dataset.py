@@ -72,6 +72,7 @@ WORLD_RECORD_FILES = (
     "daytime_register_format_records.jsonl",
     "character_register_format_records.jsonl",
     "video_making_records.jsonl",
+    "read_drills.jsonl",  # 先读后答教学数据（2026-11-23，365 条，见 docs/CHUNK5_PLAN.md §2.2b）
 )
 
 _ZH = "零一二三四五六七八九十"
@@ -207,23 +208,51 @@ def _read_text_files(entries):
 
 
 def _read_world_records(entries):
-    """读一批世界域 .jsonl 记录文件，取每条的 "text" 字段拼成文本。"""
+    """读一批世界域 .jsonl 记录文件，取每条的 "text" 字段拼成文本。
+
+    返回 (text, mask)：mask 是与 text 逐字符对齐的 list[bool]（答案区
+    掩码，供先读后答的答案区 loss 用，见 docs/Q0_TEACHING_DESIGN.md §3
+    改动 A）。有合法 answer_start 的记录，答案区 [answer_start,
+    len(text)) 为 True，其余为 False；无 answer_start 或 answer_start
+    非法的旧记录（工具调用叙事、做视频经验）整条为 True（全序列 loss，
+    旧行为）。记录间的 "\\n" 分隔符为 False。
+    """
     world = []
+    mask = []
     for entry in entries:
         with open(entry, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    world.append(json.loads(line)["text"])
-    return "\n".join(world)
+                if not line:
+                    continue
+                rec = json.loads(line)
+                text = rec["text"]
+                if world:
+                    world.append("\n")
+                    mask.append(False)
+                start = rec.get("answer_start")
+                if (not isinstance(start, int) or isinstance(start, bool)
+                        or start < 0 or start > len(text)):
+                    # 无答案边界的旧记录：整条计 loss（旧行为）
+                    mask.extend([True] * len(text))
+                else:
+                    mask.extend([False] * int(start))
+                    mask.extend([True] * (len(text) - int(start)))
+                world.append(text)
+    return "".join(world), mask
 
 
-def domain_texts(tok, paths=None, root=None):
+def domain_texts(tok, paths=None, root=None, return_answer_masks=False):
     """把 6 个域的文本编码成 token id 张量：{域名: torch.LongTensor}。
 
     paths: 域 -> 文件/glob 列表，缺省用 resolve_paths()（先 data/ 布局，
     缺文件回落 live 语料）。每个域至少 200 token，否则报错。每次调用
     都从磁盘重读（启动/续跑重建语料，见模块 docstring）。
+
+    return_answer_masks=True 时多返回一个答案掩码 dict（目前只有
+    "世界" 域）：{域名: torch.BoolTensor}，与对应域的 token id 逐
+    token 对齐（字符级分词器一字一 token，无 BOS/EOS）；True =
+    答案区 token。返回 (ids, masks)。其他域无掩码，训练时默认全 True。
     """
     paths = resolve_paths(paths, root)
     texts = {}
@@ -232,14 +261,20 @@ def domain_texts(tok, paths=None, root=None):
     texts["对话"] = _read_text_files(paths["对话"])
     texts["推理"] = reasoning_text()
     texts["常识"] = _read_text_files(paths["常识"])
-    texts["世界"] = _read_world_records(paths["世界"])
+    texts["世界"], world_mask = _read_world_records(paths["世界"])
     ids = {}
     for name, text in texts.items():
         arr = np.asarray(tok.encode(text), dtype=np.int64)
         assert len(arr) > 200, f"domain {name} too short: {len(arr)}"
         ids[name] = torch.from_numpy(arr)
         print(f"domain {name}: {len(text)} chars -> {len(arr)} tokens")
-    return ids
+    if not return_answer_masks:
+        return ids
+    assert len(world_mask) == len(ids["世界"]), (
+        f"world answer mask length {len(world_mask)} != "
+        f"world token count {len(ids['世界'])}")
+    masks = {"世界": torch.from_numpy(np.asarray(world_mask, dtype=bool))}
+    return ids, masks
 
 
 def _batch_counts(weights, batch_size):
@@ -260,7 +295,7 @@ def _domain_gate_value(name):
     return 1.0 if name in GATE_LEFT_DOMAINS else 0.0
 
 
-def make_batch_fn(ids, seq_len, batch_size=8, seed=7):
+def make_batch_fn(ids, seq_len, batch_size=8, seed=7, answer_masks=None):
     """按 RATIOS 分层采样一个 batch_fn(rng) -> (inputs, targets, gate_targets)。
 
     每批各域条数固定（最大余数法，每域每批至少 1 条，batch>=6 时），
@@ -268,6 +303,13 @@ def make_batch_fn(ids, seq_len, batch_size=8, seed=7):
     (B, S)：左支域 1.0，世界域 0.0；train_steps 只在 merge=gated 时
     把它传给 loss。注意：训练器传进来的 r 就是它自己的 rng；这里
     用独立 rng 抽域，保证配比不受训练 rng 影响。
+
+    answer_masks：domain_texts(return_answer_masks=True) 返回的掩码
+    dict（目前只有 "世界" 域），与对应域的 token id 逐 token 对齐。
+    给出时 batch_fn 多返回第四个张量 loss_mask (B, S) 布尔：世界域
+    行只保留答案区 token（目标侧：targets[i] = arr[s+1+i]，掩码取
+    同一位移后的答案区），其他域全 True。不给时保持原有的三元组返回
+    （全序列 loss，旧行为）。
 
     与 NumPy 版同一签名、同一采样数学；返回值改成 torch 张量
     （inputs/targets long，gate_targets float32），直接喂模型。
@@ -277,21 +319,37 @@ def make_batch_fn(ids, seq_len, batch_size=8, seed=7):
     weights = weights / weights.sum()
     rng = np.random.default_rng(seed)
     counts = _batch_counts(weights, batch_size)
+    if answer_masks is not None:
+        for name, m in answer_masks.items():
+            if len(m) != len(ids[name]):
+                raise ValueError(
+                    f"answer mask for {name}: length {len(m)} != "
+                    f"domain token count {len(ids[name])}")
 
     def batch_fn(r=None):
-        inputs, targets, gate = [], [], []
+        inputs, targets, gate, loss_mask = [], [], [], []
         for d, c in enumerate(counts):
             arr = ids[names[d]]
             t = _domain_gate_value(names[d])
+            row_mask = None if answer_masks is None else answer_masks.get(names[d])
             for _ in range(int(c)):
                 s = int(rng.integers(0, len(arr) - seq_len - 1))
                 inputs.append(torch.as_tensor(arr[s:s + seq_len], dtype=torch.long))
                 targets.append(torch.as_tensor(arr[s + 1:s + seq_len + 1], dtype=torch.long))
                 gate.append(torch.full((seq_len,), t, dtype=torch.float32))
+                if row_mask is None:
+                    loss_mask.append(torch.ones(seq_len, dtype=torch.bool))
+                else:
+                    # 目标侧掩码：targets[i] 对应 arr[s+1+i]，只留答案区
+                    loss_mask.append(torch.as_tensor(
+                        row_mask[s + 1:s + seq_len + 1], dtype=torch.bool))
         order = rng.permutation(len(inputs))
-        return (torch.stack([inputs[i] for i in order]),
-                torch.stack([targets[i] for i in order]),
-                torch.stack([gate[i] for i in order]))
+        packed = (torch.stack([inputs[i] for i in order]),
+                  torch.stack([targets[i] for i in order]),
+                  torch.stack([gate[i] for i in order]))
+        if answer_masks is None:
+            return packed
+        return packed + (torch.stack([loss_mask[i] for i in order]),)
 
     return batch_fn
 
