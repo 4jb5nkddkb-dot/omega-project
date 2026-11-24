@@ -73,6 +73,7 @@ WORLD_RECORD_FILES = (
     "character_register_format_records.jsonl",
     "video_making_records.jsonl",
     "read_drills.jsonl",  # 先读后答教学数据（2026-11-23，365 条，见 docs/CHUNK5_PLAN.md §2.2b）
+    "chunk7_drills.jsonl",  # 第 7 块：取经路/水帘洞 Q0 专攻 + Q2 空随身平衡（2026-11-24，135 条，见 docs/CHUNK7_DIAGNOSIS.md）
 )
 
 _ZH = "零一二三四五六七八九十"
