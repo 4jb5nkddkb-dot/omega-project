@@ -52,11 +52,25 @@ def _chunk7_count():
     return n
 
 
+def _chunk8_count():
+    n = 0
+    for line in (Path(__file__).resolve().parent.parent
+                 / "data" / "processed" / "chunk8_drills.jsonl").read_text(
+                     encoding="utf-8").splitlines():
+        if line.strip():
+            rec = json.loads(line)
+            assert rec["text"][rec["answer_start"]:] == rec["answer"]
+            n += 1
+    return n
+
+
 def test_world_mask_aligns_and_includes_drills():
     assert "read_drills.jsonl" in WORLD_RECORD_FILES
     assert _drill_count() == 365
     assert "chunk7_drills.jsonl" in WORLD_RECORD_FILES
     assert _chunk7_count() == 135
+    assert "chunk8_drills.jsonl" in WORLD_RECORD_FILES
+    assert _chunk8_count() == 133
     tok = _tok()
     ids, masks = domain_texts(tok, paths=live_corpus_paths(),
                               return_answer_masks=True)
