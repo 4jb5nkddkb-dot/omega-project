@@ -75,6 +75,7 @@ WORLD_RECORD_FILES = (
     "read_drills.jsonl",  # 先读后答教学数据（2026-11-23，365 条，见 docs/CHUNK5_PLAN.md §2.2b）
     "chunk7_drills.jsonl",  # 第 7 块：取经路/水帘洞 Q0 专攻 + Q2 空随身平衡（2026-11-24，135 条，见 docs/CHUNK7_DIAGNOSIS.md）
     "chunk8_drills.jsonl",  # 第 8 块：Q0 平衡 + Q3 昼夜 + 因果原态（2026-11-24，133 条，见 docs/CHUNK8_DIAGNOSIS.md）
+    "chunk9_drills.jsonl",  # 第 9 块：带记忆前缀 25 条（环语境，见 docs/CHUNK9_DIAGNOSIS.md）；裸 Q3/Q2/Q0 0 条（数据已完备，不再加同类记录）
 )
 
 _ZH = "零一二三四五六七八九十"

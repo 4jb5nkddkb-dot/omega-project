@@ -64,6 +64,18 @@ def _chunk8_count():
     return n
 
 
+def _chunk9_records():
+    recs = []
+    for line in (Path(__file__).resolve().parent.parent
+                 / "data" / "processed" / "chunk9_drills.jsonl").read_text(
+                     encoding="utf-8").splitlines():
+        if line.strip():
+            rec = json.loads(line)
+            assert rec["text"][rec["answer_start"]:] == rec["answer"]
+            recs.append(rec)
+    return recs
+
+
 def test_world_mask_aligns_and_includes_drills():
     assert "read_drills.jsonl" in WORLD_RECORD_FILES
     assert _drill_count() == 365
@@ -71,6 +83,8 @@ def test_world_mask_aligns_and_includes_drills():
     assert _chunk7_count() == 135
     assert "chunk8_drills.jsonl" in WORLD_RECORD_FILES
     assert _chunk8_count() == 133
+    assert "chunk9_drills.jsonl" in WORLD_RECORD_FILES
+    assert len(_chunk9_records()) == 25
     tok = _tok()
     ids, masks = domain_texts(tok, paths=live_corpus_paths(),
                               return_answer_masks=True)
@@ -114,3 +128,43 @@ def test_masked_loss_only_counts_masked_positions():
     assert abs(float(got) - float(full)) > 1e-6
     with pytest.raises(ValueError):
         masked_loss(logits, targets, torch.zeros_like(mask))
+
+
+def test_chunk9_memory_prefix_format():
+    """第 9 块：25 条全带记忆前缀，格式与 evaluation/sidecar.py
+    的 format_examples 一致（每行 = 提问 + 正确回复，\\n 连接，
+    末尾带 \\n）；S0 的 7 条覆盖环在各步的真实缓存前缀；其余
+    6 地各 3 条（Q0/Q2/Q3，前缀 [Q0,Q1]）。裸 Q0/Q1/Q2/Q3 为 0 条。"""
+    recs = _chunk9_records()
+    assert len(recs) == 25
+    questions = ["你在什么地方。", "在场人物有谁。",
+                 "随身物品有什么。", "现在是白天还是夜晚。"]
+    for r in recs:
+        prefix = r["memory_prefix"]
+        assert prefix, "第 9 块记录必须带记忆前缀"
+        assert r["text"].startswith(prefix), "记录文本必须以记忆前缀开头"
+        assert prefix.endswith("\n")
+        for line in prefix.rstrip("\n").split("\n"):
+            assert any(line.startswith(q) for q in questions), \
+                f"前缀行必须以提问开头：{line!r}"
+            assert line.endswith("。"), f"前缀行必须以句号结尾：{line!r}"
+            assert len(line) <= 64, f"前缀行超 64 字（sidecar 截断上限）：{line!r}"
+    s0 = [r for r in recs if r["state"]["loc"] == "取经路"
+          and r["state"]["time_step"] == 0]
+    assert len(s0) == 7
+    # S0 的 7 条：Q0×1、Q1×2、Q2×2、Q3×2，且前缀覆盖环的缓存态。
+    from collections import Counter
+    assert Counter(r["question"] for r in s0) == Counter({
+        "你在什么地方。": 1, "在场人物有谁。": 2,
+        "随身物品有什么。": 2, "现在是白天还是夜晚。": 2})
+    # 环第 5/9 步的 Q0 前缀必须是 [Q1,Q2,Q3] 三行。
+    q0_s0 = [r for r in s0 if r["question"] == "你在什么地方。"][0]
+    assert q0_s0["memory_prefix"].count("\n") == 3
+    assert q0_s0["memory_prefix"].startswith("在场人物有谁。")
+    others = [r for r in recs if r["state"]["loc"] != "取经路"]
+    assert len(others) == 18
+    for loc in ["花果山", "水帘洞", "高老庄", "流沙河", "南海", "天宫"]:
+        sub = [r for r in others if r["state"]["loc"] == loc]
+        assert len(sub) == 3
+        assert {r["question"] for r in sub} == {
+            "你在什么地方。", "随身物品有什么。", "现在是白天还是夜晚。"}
